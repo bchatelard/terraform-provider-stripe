@@ -3,9 +3,11 @@ package stripe
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	stripe "github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/client"
@@ -208,14 +210,19 @@ func resourceStripeCouponCreate(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceStripeCouponRead(d *schema.ResourceData, m interface{}) error {
-	client := m.(*client.API)
-	params := &stripe.CouponParams{}
-	params.AddExpand("applies_to")
-	coupon, err := client.Coupons.Get(d.Id(), params)
+	return resource.Retry(d.Timeout(schema.TimeoutRead), func() *resource.RetryError {
+		client := m.(*client.API)
+		params := &stripe.CouponParams{}
+		params.AddExpand("applies_to")
+		coupon, err := client.Coupons.Get(d.Id(), params)
+		if err != nil {
+			if sErr, ok := err.(*stripe.Error); ok && sErr.HTTPStatusCode == http.StatusTooManyRequests {
+				return resource.RetryableError(sErr)
+			}
+			d.SetId("")
+			return resource.NonRetryableError(err)
+		}
 
-	if err != nil {
-		d.SetId("")
-	} else {
 		d.Set("code", d.Id())
 		d.Set("amount_off", coupon.AmountOff)
 		d.Set("currency", coupon.Currency)
@@ -231,9 +238,9 @@ func resourceStripeCouponRead(d *schema.ResourceData, m interface{}) error {
 		d.Set("times_redeemed", coupon.TimesRedeemed)
 		d.Set("valid", coupon.Valid)
 		d.Set("created", coupon.Valid)
-	}
 
-	return err
+		return nil
+	})
 }
 
 func resourceStripeCouponUpdate(d *schema.ResourceData, m interface{}) error {
