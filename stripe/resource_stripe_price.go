@@ -2,7 +2,6 @@ package stripe
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 
@@ -61,6 +60,7 @@ func resourceStripePrice() *schema.Resource {
 					Type: schema.TypeString,
 				},
 				Optional: true,
+				ForceNew: true,
 			},
 			"unit_amount": &schema.Schema{
 				Type:     schema.TypeInt,
@@ -142,15 +142,15 @@ func resourceStripePrice() *schema.Resource {
 				ForceNew: true,
 			},
 		},
-        CustomizeDiff: customdiff.All(
-            customdiff.ForceNewIfChange("tax_behavior", func (old, new, meta interface{}) bool {
+		CustomizeDiff: customdiff.All(
+			customdiff.ForceNewIfChange("tax_behavior", func(old, new, meta interface{}) bool {
 				// Once specified as either inclusive or exclusive, tax behavior cannot be changed.
 				if old.(string) == "inclusive" || old.(string) == "exclusive" {
 					return old.(string) != new.(string)
 				}
 				return false
-            }),
-       ),
+			}),
+		),
 	}
 }
 
@@ -264,7 +264,9 @@ func resourceStripePriceRead(d *schema.ResourceData, m interface{}) error {
 		if price.Product != nil {
 			d.Set("product", price.Product.ID)
 		}
-		d.Set("recurring", price.Active)
+		if price.Recurring != nil {
+			d.Set("recurring", price.Recurring)
+		}
 		d.Set("unit_amount", price.UnitAmount)
 		d.Set("unit_amount_decimal", price.UnitAmountDecimal)
 		d.Set("tiers_mode", price.TiersMode)
@@ -343,5 +345,15 @@ func resourceStripePriceUpdate(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceStripePriceDelete(d *schema.ResourceData, m interface{}) error {
-	return fmt.Errorf("[WARNING] Stripe doesn't allow deleting prices via the API. Your state file contains at least one (\"%v\") that needs deletion. Please remove it manually.", d.Id())
+	client := m.(*client.API)
+	params := stripe.PriceParams{}
+
+	params.Active = stripe.Bool(false)
+
+	_, err := client.Prices.Update(d.Id(), &params)
+	if err != nil {
+		return err
+	}
+
+	return resourceStripePriceRead(d, m)
 }
