@@ -111,7 +111,6 @@ func resourceStripeProductCreate(d *schema.ResourceData, m interface{}) error {
 	}
 
 	product, err := client.Products.New(params)
-
 	if err != nil {
 		return err
 	}
@@ -124,8 +123,8 @@ func resourceStripeProductCreate(d *schema.ResourceData, m interface{}) error {
 
 func resourceStripeProductRead(d *schema.ResourceData, m interface{}) error {
 	client := m.(*client.API)
-	product, err := client.Products.Get(d.Id(), nil)
 
+	product, err := client.Products.Get(d.Id(), nil)
 	if err != nil {
 		return err
 	}
@@ -175,7 +174,6 @@ func resourceStripeProductUpdate(d *schema.ResourceData, m interface{}) error {
 	}
 
 	_, err := client.Products.Update(d.Id(), &params)
-
 	if err != nil {
 		return err
 	}
@@ -185,8 +183,11 @@ func resourceStripeProductUpdate(d *schema.ResourceData, m interface{}) error {
 
 func resourceStripeProductDelete(d *schema.ResourceData, m interface{}) error {
 	client := m.(*client.API)
-	_, err := client.Products.Del(d.Id(), nil)
+	params := stripe.ProductParams{}
 
+	params.Active = stripe.Bool(false)
+
+	_, err := client.Products.Update(d.Id(), &params)
 	if err == nil {
 		d.SetId("")
 	}
