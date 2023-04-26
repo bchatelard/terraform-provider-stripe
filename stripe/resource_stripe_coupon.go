@@ -26,6 +26,10 @@ func resourceStripeCoupon() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true, // require it as the default one is more trouble than it's worth
 			},
+			"name": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"amount_off": &schema.Schema{
 				Type:     schema.TypeInt,
 				Optional: true,
@@ -33,6 +37,11 @@ func resourceStripeCoupon() *schema.Resource {
 			},
 			"currency": &schema.Schema{
 				Type:     schema.TypeString, // <- check values
+				Optional: true,
+				ForceNew: true,
+			},
+			"percent_off": &schema.Schema{
+				Type:     schema.TypeFloat,
 				Optional: true,
 				ForceNew: true,
 			},
@@ -52,26 +61,23 @@ func resourceStripeCoupon() *schema.Resource {
 				Default:  nil,
 				ForceNew: true,
 			},
+			"redeem_by": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+			"applies_to": &schema.Schema{
+				Type:     schema.TypeList,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				Optional: true,
+				ForceNew: true,
+			},
 			"metadata": &schema.Schema{
 				Type: schema.TypeMap,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
 				Optional: true,
-			},
-			"name": &schema.Schema{
-				Type:     schema.TypeString,
-				Optional: true,
-			},
-			"percent_off": &schema.Schema{
-				Type:     schema.TypeFloat,
-				Optional: true,
-				ForceNew: true,
-			},
-			"redeem_by": &schema.Schema{
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
 			},
 			// Computed
 			"valid": &schema.Schema{
@@ -92,6 +98,28 @@ func resourceStripeCoupon() *schema.Resource {
 			},
 		},
 	}
+}
+
+func expandCouponAppliesTo(in []interface{}) *stripe.CouponAppliesToParams {
+	out := &stripe.CouponAppliesToParams{
+		Products: make([]*string, len(in)),
+	}
+	for i, v := range in {
+		productID := v.(string)
+		out.Products[i] = stripe.String(productID)
+	}
+	return out
+}
+
+func flattenCouponAppliesTo(in *stripe.CouponAppliesTo) []interface{} {
+	if in == nil {
+		return nil
+	}
+	out := make([]interface{}, len(in.Products))
+	for i, productID := range in.Products {
+		out[i] = productID
+	}
+	return out
 }
 
 func resourceStripeCouponCreate(d *schema.ResourceData, m interface{}) error {
@@ -140,10 +168,17 @@ func resourceStripeCouponCreate(d *schema.ResourceData, m interface{}) error {
 	}
 
 	if currency, ok := d.GetOk("currency"); ok {
-		if &params.AmountOff == nil {
-			return fmt.Errorf("can't set currency when using percent off")
+		if params.PercentOff != nil {
+			return fmt.Errorf("can't set currency if percent_off is defined")
+		}
+		if params.AmountOff == nil {
+			return fmt.Errorf("can't set currency if amount_off is undefined")
 		}
 		params.Currency = stripe.String(currency.(string))
+	}
+
+	if appliesTo, ok := d.GetOk("applies_to"); ok {
+		params.AppliesTo = expandCouponAppliesTo(appliesTo.([]interface{}))
 	}
 
 	if redeemByStr, ok := d.GetOk("redeem_by"); ok {
@@ -174,7 +209,9 @@ func resourceStripeCouponCreate(d *schema.ResourceData, m interface{}) error {
 
 func resourceStripeCouponRead(d *schema.ResourceData, m interface{}) error {
 	client := m.(*client.API)
-	coupon, err := client.Coupons.Get(d.Id(), nil)
+	params := &stripe.CouponParams{}
+	params.AddExpand("applies_to")
+	coupon, err := client.Coupons.Get(d.Id(), params)
 
 	if err != nil {
 		d.SetId("")
@@ -189,6 +226,7 @@ func resourceStripeCouponRead(d *schema.ResourceData, m interface{}) error {
 		d.Set("metadata", coupon.Metadata)
 		d.Set("name", coupon.Name)
 		d.Set("percent_off", coupon.PercentOff)
+		d.Set("applies_to", flattenCouponAppliesTo(coupon.AppliesTo))
 		d.Set("redeem_by", coupon.RedeemBy)
 		d.Set("times_redeemed", coupon.TimesRedeemed)
 		d.Set("valid", coupon.Valid)

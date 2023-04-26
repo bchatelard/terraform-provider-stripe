@@ -1,6 +1,6 @@
 default: compile
 
-VERSION=1.9.4
+VERSION=1.9.5
 
 .PHONY=compile
 compile:
