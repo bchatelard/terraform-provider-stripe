@@ -302,9 +302,9 @@ func expandPriceTiers(in []interface{}) []*stripe.PriceTierParams {
 			UpTo:    stripe.Int64(int64(tier["up_to"].(int))),
 			UpToInf: stripe.Bool(tier["up_to_inf"].(bool)),
 		}
-		if tier["flat_amount"] != nil {
+		if tier["flat_amount"] != nil && int64(tier["flat_amount"].(int)) != 0 {
 			out[i].FlatAmount = stripe.Int64(int64(tier["flat_amount"].(int)))
-		} else if tier["flat_amount_decimal"] != nil {
+		} else if tier["flat_amount_decimal"] != nil && tier["flat_amount_decimal"].(float64) != 0 {
 			out[i].FlatAmountDecimal = stripe.Float64(tier["flat_amount_decimal"].(float64))
 		}
 		if tier["unit_amount"] != nil {
