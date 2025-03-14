@@ -3,7 +3,9 @@ package stripe
 import (
 	"fmt"
 	"log"
+	"net/http"
 
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 	"github.com/stripe/stripe-go/v72"
@@ -400,25 +402,31 @@ func resourceStripeCustomerPortalCreate(d *schema.ResourceData, m interface{}) e
 }
 
 func resourceStripeCustomerPortalRead(d *schema.ResourceData, m interface{}) error {
-	client := m.(*client.API)
-	portal, err := client.BillingPortalConfigurations.Get(d.Id(), nil)
+	return resource.Retry(d.Timeout(schema.TimeoutRead), func() *resource.RetryError {
+		client := m.(*client.API)
+		portal, err := client.BillingPortalConfigurations.Get(d.Id(), nil)
 
-	if err != nil {
-		d.SetId("")
-	} else {
-		d.Set("id", portal.ID)
-		d.Set("object", portal.Object)
-		d.Set("active", portal.Active)
-		d.Set("business_profile", portal.BusinessProfile)
-		d.Set("created", portal.Created)
-		d.Set("default_return_url", portal.DefaultReturnURL)
-		d.Set("features", portal.Features)
-		d.Set("is_default", portal.IsDefault)
-		d.Set("livemode", portal.Livemode)
-		d.Set("metadata", portal.Metadata)
-		d.Set("updated", portal.Updated)
-	}
-	return err
+		if err != nil {
+			if sErr, ok := err.(*stripe.Error); ok && sErr.HTTPStatusCode == http.StatusTooManyRequests {
+				return resource.RetryableError(sErr)
+			}
+			d.SetId("")
+			return resource.NonRetryableError(err)
+		} else {
+			d.Set("id", portal.ID)
+			d.Set("object", portal.Object)
+			d.Set("active", portal.Active)
+			d.Set("business_profile", portal.BusinessProfile)
+			d.Set("created", portal.Created)
+			d.Set("default_return_url", portal.DefaultReturnURL)
+			d.Set("features", portal.Features)
+			d.Set("is_default", portal.IsDefault)
+			d.Set("livemode", portal.Livemode)
+			d.Set("metadata", portal.Metadata)
+			d.Set("updated", portal.Updated)
+		}
+		return nil
+	})
 }
 
 func resourceStripeCustomerPortalUpdate(d *schema.ResourceData, m interface{}) error {
