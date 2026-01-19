@@ -55,7 +55,7 @@ func resourceCustomerPortal() *schema.Resource {
 										Required: true,
 										Elem: &schema.Schema{
 											Type:         schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"email", "address", "shipping", "phone", "tax_id"}, false),
+											ValidateFunc: validation.StringInSlice([]string{"name", "email", "address", "shipping", "phone", "tax_id"}, false),
 										},
 									},
 									"enabled": &schema.Schema{
